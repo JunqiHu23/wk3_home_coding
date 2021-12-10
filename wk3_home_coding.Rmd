@@ -1,0 +1,230 @@
+---
+title: "wk3_home_coding"
+author: "chris"
+date: "2021/12/10"
+output: html_document
+---
+```{r}
+library(sf)
+library(here)
+library(janitor)
+library(tidyverse)
+library(raster)
+library(ggplot2)
+```
+```{r}
+
+china <- st_read(here::here('data',
+                            "gadm36_CHN_gpkg",
+                            "gadm36_CHN.gpkg"),
+                 layer = "gadm36_CHN_0")
+```
+
+```{r}
+
+world_cities <- st_read(here::here('data',
+                                   'World_Cities',
+                                   'World_Cities.shp'))
+```
+
+```{r}
+chinese_cities <- world_cities%>%
+  clean_names()%>%
+  filter(cntry_name=="China")
+```
+
+```{r}
+ssp1 <- stack(here::here('data',
+                         "wc2.1_2.5m_tmax_BCC-CSM2-MR_ssp126_2081-2100",
+                         "ssp126",
+                         "wc2.1_2.5m_tmax_BCC-CSM2-MR_ssp126_2081-2100.tif"))
+```
+
+```{r}
+ssp5 <- stack(here::here('data',
+                         "wc2.1_2.5m_tmax_BCC-CSM2-MR_ssp585_2081-2100",
+                         "ssp585",
+                         "wc2.1_2.5m_tmax_BCC-CSM2-MR_ssp585_2081-2100.tif"))
+```
+
+```{r}
+ssp1brick <- brick(ssp1)
+```
+
+```{r}
+ssp_diff <- ssp5-ssp1
+```
+
+```{r}
+####ssp1
+china_diff1 <- ssp1%>%
+  #now crop our temp data to the extent
+  crop(.,china)
+
+exact_china1 <- china_diff1 %>%
+  mask(.,china, na.rm=TRUE)
+```
+
+```{r}
+####ssp5
+china_diff5 <- ssp5%>%
+  #now crop our temp data to the extent
+  crop(.,china)
+
+exact_china5 <- china_diff5 %>%
+  mask(.,china, na.rm=TRUE)
+```
+
+```{r}
+####sub
+diff_climate_model <- exact_china5-exact_china1
+```
+
+```{r}
+month <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+names(diff_climate_model) <- month
+```
+
+```{r}
+china_city_diff <- raster::extract(diff_climate_model,chinese_cities)
+```
+
+```{r}
+china_city_diff2 <- chinese_cities %>% 
+  add_column(china_city_diffJan=china_city_diff[,1])%>%
+  add_column(china_city_diffFeb=china_city_diff[,2])%>%
+  add_column(china_city_diffMar=china_city_diff[,3])%>%
+  add_column(china_city_diffApril=china_city_diff[,4])%>%
+  add_column(china_city_diffMay=china_city_diff[,5])%>%
+  add_column(china_city_diffJune=china_city_diff[,6])%>%
+  add_column(china_city_diffJuly=china_city_diff[,7])%>%
+  add_column(china_city_diffAug=china_city_diff[,8])%>%
+  add_column(china_city_diffSept=china_city_diff[,9])%>%
+  add_column(china_city_diffOct=china_city_diff[,10])%>%
+  add_column(china_city_diffNov=china_city_diff[,11])%>%
+  add_column(china_city_diffDec=china_city_diff[,12])
+```
+
+```{r}
+# all cities in spain where there is data
+
+city_climate_diff <- china_city_diff2 %>%
+  dplyr::select(contains("china_city_diff"))%>%
+  st_drop_geometry(.)%>%
+  as_tibble()%>%
+  dplyr::rename(.,Jan=china_city_diffJan)%>%
+  dplyr::rename(.,Feb=china_city_diffFeb)%>%
+  dplyr::rename(.,Mar=china_city_diffMar)%>%
+  dplyr::rename(.,Apr=china_city_diffApril)%>%
+  dplyr::rename(.,May=china_city_diffMay)%>%
+  dplyr::rename(.,Jun=china_city_diffJune)%>%
+  dplyr::rename(.,Jul=china_city_diffJuly)%>%
+  dplyr::rename(.,Aug=china_city_diffAug)%>%
+  dplyr::rename(.,Sep=china_city_diffSept)%>%
+  dplyr::rename(.,Oct=china_city_diffOct)%>%
+  dplyr::rename(.,Nov=china_city_diffNov)%>%
+  dplyr::rename(.,Dec=china_city_diffDec)
+```
+
+```{r}
+tidy_city_diff <- city_climate_diff %>%
+  pivot_longer(everything(), 
+               names_to="Months", 
+               values_to="temp_diff")
+```
+
+```{r}
+facet_plot <- tidy_city_diff %>%
+  mutate(Months = factor(Months, levels = c("Jan","Feb","Mar",
+                                            "Apr","May","Jun",
+                                            "Jul","Aug","Sep",
+                                            "Oct","Nov","Dec")))
+```
+
+```{r}
+# Plot faceted histogram
+ggplot(facet_plot, aes(x=temp_diff, na.rm=TRUE))+
+  geom_histogram(color="black", binwidth = 1)+
+  labs(title="Ggplot2 faceted histogram of China temperatures", 
+       x="Temperature",
+       y="Frequency")+
+  facet_grid(Months ~ .)+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+## extra analysis
+## when i assumed it was just a single year not months
+
+
+```{r}
+ssp2 <-raster(here::here('data',
+                         "wc2.1_2.5m_tmax_BCC-CSM2-MR_ssp245_2081-2100",
+                         "ssp245",
+                         "wc2.1_2.5m_tmax_BCC-CSM2-MR_ssp245_2081-2100.tif"))
+
+ssp3 <-raster(here::here('data',
+                         "wc2.1_2.5m_tmax_BCC-CSM2-MR_ssp370_2081-2100",
+                         "ssp370",
+                         "wc2.1_2.5m_tmax_BCC-CSM2-MR_ssp370_2081-2100.tif"))
+```
+
+```{r}
+china_city_ssp1<- raster::extract(ssp1, chinese_cities)
+china_city_ssp2<- raster::extract(ssp2, chinese_cities)
+china_city_ssp3<- raster::extract(ssp3, chinese_cities)
+china_city_ssp5<- raster::extract(ssp5, chinese_cities)
+```
+
+
+```{r}
+china_city3 <- chinese_cities %>% 
+  add_column(ssp1=china_city_ssp1)%>%
+  add_column(ssp2=china_city_ssp2)%>%
+  add_column(ssp3=china_city_ssp3)%>%
+  add_column(ssp5=china_city_ssp5)
+```
+
+```{r}
+china_city4 <- china_city3 %>%
+  as_tibble()%>%
+  dplyr::select(city_name, ssp1, ssp2, ssp3, ssp5)%>%
+  pivot_longer(cols = 2:5,
+               names_to = "model",
+               values_to = "max_temp"
+  )
+```
+
+```{r}
+violin <- ggplot(china_city4, aes(x=model, y=max_temp, fill=model)) + # fill=name allow to automatically dedicate a color for each group
+  geom_violin()
+```
+
+
+```{r}
+
+box <- ggplot(china_city4, aes(x=model, y=max_temp, fill=model)) + # fill=name allow to automatically dedicate a color for each group
+  geom_boxplot()+
+  theme_minimal()+
+  labs(
+    x="Model", 
+    y="Climate projection max tempearture")+
+  theme(legend.position = "none")
+```
+
+```{r}
+violin <- ggplot(china_city4, aes(x=model, y=max_temp, fill=model)) + # fill=name allow to automatically dedicate a color for each group
+  geom_violin()
+```
+
+
+
+
+# we could also create a violin plot for the whole of china
+# per model or use metro areas. 
+#_________________________________
+
+
+
+
+
+
